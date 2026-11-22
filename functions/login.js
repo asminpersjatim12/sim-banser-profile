@@ -1,0 +1,53 @@
+import { escapeHtml, readSession, createSession } from "./lib/auth.js";
+
+function page(error = "") {
+  return `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login Admin | SIM BANSER JATIM</title><style>:root{--navy:#111f35;--red:#9f1d24;--gold:#dda91f;--muted:#667079}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;grid-template-columns:minmax(280px,1fr) minmax(360px,520px);font-family:Arial,sans-serif;color:#1d2a38}.side{padding:4rem;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,var(--navy),var(--red));color:#fff}.side h1{margin:.25rem 0 1rem;font-family:Georgia,serif;font-size:clamp(2.2rem,5vw,4.2rem)}.side p{color:#d4e2da}.eyebrow{color:var(--gold);font-size:.75rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase}main{display:grid;place-items:center;padding:2rem;background:#fcfaf4}.card{width:min(390px,100%)}h2{margin:.25rem 0 .7rem;font-family:Georgia,serif;font-size:2.1rem}label{display:block;margin-top:1rem;font-size:.82rem;font-weight:800}input{width:100%;margin-top:.45rem;padding:.85rem .95rem;border:1px solid #ddd5c5;border-radius:.65rem;font:inherit}button{width:100%;margin-top:1.25rem;padding:.9rem 1rem;border:0;border-radius:.65rem;background:var(--navy);color:#fff;font-weight:900;cursor:pointer}.back{display:inline-block;margin-top:1rem;color:var(--navy);text-decoration:none;font-size:.88rem;font-weight:800}.error{padding:.75rem;border-radius:.65rem;background:#faeeee;color:#9f1d24}@media(max-width:760px){body{grid-template-columns:1fr}.side{min-height:230px;padding:2rem}main{min-height:calc(100vh - 230px)}} </style></head><body><aside class="side"><p class="eyebrow">SATKORWIL BANSER JATIM</p><h1>Area Administrasi</h1><p>Kelola informasi kaderisasi wilayah secara terpisah dari halaman profil publik.</p></aside><main><div class="card"><p class="eyebrow" style="color:#9f1d24">Akses terbatas</p><h2>Masuk Dashboard</h2>${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}<form method="post"><label for="username">Username</label><input id="username" name="username" required autocomplete="username" autofocus><label for="password">Password</label><input id="password" name="password" type="password" required autocomplete="current-password"><button type="submit">Masuk</button></form><a class="back" href="/">Kembali ke profil publik</a></div></main></body></html>`;
+}
+
+export async function onRequest(context) {
+  const { request, env } = context;
+  if (!env.DB || !env.SESSION_SECRET) {
+    return new Response("Konfigurasi Cloudflare belum lengkap.", { status: 500 });
+  }
+
+  const existingSession = await readSession(request, env.SESSION_SECRET);
+  if (existingSession) {
+    return Response.redirect(new URL("/dashboard", request.url), 302);
+  }
+
+  if (request.method === "GET") {
+    const user = await env.DB.prepare("SELECT id FROM users LIMIT 1").first();
+    if (!user) return Response.redirect(new URL("/setup", request.url), 302);
+    return new Response(page(), { headers: { "Content-Type": "text/html;charset=UTF-8" } });
+  }
+
+  if (request.method !== "POST") {
+    return new Response("Metode tidak diizinkan.", { status: 405 });
+  }
+
+  const form = await request.formData();
+  const username = String(form.get("username") || "").trim();
+  const password = String(form.get("password") || "");
+  const user = await env.DB.prepare(
+    "SELECT username, password_salt, password_hash FROM users WHERE username = ?"
+  ).bind(username).first();
+
+  if (!user) {
+    return new Response(page("Username atau password tidak valid."), { status: 401, headers: { "Content-Type": "text/html;charset=UTF-8" } });
+  }
+
+  const { verifyPassword } = await import("./lib/auth.js");
+  if (!(await verifyPassword(password, user.password_salt, user.password_hash))) {
+    return new Response(page("Username atau password tidak valid."), { status: 401, headers: { "Content-Type": "text/html;charset=UTF-8" } });
+  }
+
+  const session = await createSession(user.username, env.SESSION_SECRET);
+  const secure = new URL(request.url).protocol === "https:";
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: "/dashboard",
+      "Set-Cookie": `banser_session=${encodeURIComponent(session)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${secure ? "; Secure" : ""}`,
+    },
+  });
+}

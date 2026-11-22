@@ -1,0 +1,8 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^storage/ - [F,L]
+</IfModule>
+
+<Files "*.sqlite">
+  Require all denied
+</Files>
