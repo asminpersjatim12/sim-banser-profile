@@ -1,0 +1,8 @@
+name = "sim-banser-profile"
+pages_build_output_dir = "."
+compatibility_date = "2026-11-22"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "banser-admin"
+database_id = "fed3a540-4834-4ed5-a8cb-ee984436d13b"
