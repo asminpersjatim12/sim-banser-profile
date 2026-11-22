@@ -18,7 +18,12 @@ export async function onRequest(context) {
   if (request.method === "GET") {
     const user = await env.DB.prepare("SELECT id FROM users LIMIT 1").first();
     if (!user) return Response.redirect(new URL("/setup", request.url), 302);
-    return new Response(page(), { headers: { "Content-Type": "text/html;charset=UTF-8" } });
+    return new Response(page(), {
+      headers: {
+        "Content-Type": "text/html;charset=UTF-8",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   }
 
   if (request.method !== "POST") {

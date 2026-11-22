@@ -14,7 +14,7 @@ export async function onRequest(context) {
   return new Response(page(session.username), {
     headers: {
       "Content-Type": "text/html;charset=UTF-8",
-      "Cache-Control": "no-store",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   });
 }

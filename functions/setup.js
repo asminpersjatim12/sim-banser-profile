@@ -8,13 +8,17 @@ export async function onRequest(context) {
   const { request, env } = context;
   if (!env.DB) return new Response("Database D1 belum dikonfigurasi.", { status: 500 });
 
-  const user = await env.DB.prepare("SELECT id FROM users LIMIT 1").first();
-  if (user) return new Response("Halaman setup tidak tersedia.", { status: 404 });
-
   if (request.method === "GET") {
-    return new Response(page(), { headers: { "Content-Type": "text/html;charset=UTF-8" } });
+    return new Response(page(), {
+      headers: {
+        "Content-Type": "text/html;charset=UTF-8",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   }
   if (request.method !== "POST") return new Response("Metode tidak diizinkan.", { status: 405 });
+  const user = await env.DB.prepare("SELECT id FROM users LIMIT 1").first();
+  if (user) return new Response("Halaman setup tidak tersedia.", { status: 404 });
   const form = await request.formData();
   const username = String(form.get("username") || "").trim();
   const password = String(form.get("password") || "");
