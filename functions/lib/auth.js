@@ -54,37 +54,38 @@ async function signingKey(secret) {
   );
 }
 
-export async function createSession(username, secret) {
-  const payload = JSON.stringify({
-    username,
-    expires: Date.now() + 8 * 60 * 60 * 1000,
-  });
-  const payloadEncoded = bytesToHex(encoder.encode(payload));
-  const signature = await crypto.subtle.sign("HMAC", await signingKey(secret), encoder.encode(payloadEncoded));
-  return `${payloadEncoded}.${bytesToHex(new Uint8Array(signature))}`;
+export async function createSession(username, env) {
+  await env.DB.exec(
+    "CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, expires_at TEXT NOT NULL)"
+  );
+  const token = randomHex(32);
+  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+  await env.DB.prepare(
+    "INSERT INTO sessions (token, username, expires_at) VALUES (?, ?, ?)"
+  ).bind(token, username, expiresAt).run();
+  await env.DB.prepare(
+    "DELETE FROM sessions WHERE expires_at < ?"
+  ).bind(new Date().toISOString()).run();
+  return token;
 }
 
-export async function readSession(request, secret) {
+export async function readSession(request, env) {
+  await env.DB.exec(
+    "CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, expires_at TEXT NOT NULL)"
+  );
   const cookie = request.headers.get("Cookie") || "";
   const match = cookie.match(/(?:^|;\s*)banser_session=([^;]+)/);
   if (!match) return null;
-
-  const [payloadEncoded, signatureHex] = decodeURIComponent(match[1]).split(".");
-  if (!payloadEncoded || !signatureHex) return null;
-
-  const expected = await crypto.subtle.sign("HMAC", await signingKey(secret), encoder.encode(payloadEncoded));
-  const expectedHex = bytesToHex(new Uint8Array(expected));
-  if (signatureHex.length !== expectedHex.length) return null;
-  let difference = 0;
-  for (let index = 0; index < signatureHex.length; index += 1) {
-    difference |= signatureHex.charCodeAt(index) ^ expectedHex.charCodeAt(index);
+  const token = decodeURIComponent(match[1]);
+  const session = await env.DB.prepare(
+    "SELECT username, expires_at FROM sessions WHERE token = ?"
+  ).bind(token).first();
+  if (!session) return null;
+  if (session.expires_at < new Date().toISOString()) {
+    await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
+    return null;
   }
-  if (difference !== 0) return null;
-
-  const bytes = hexToBytes(payloadEncoded);
-  const payload = JSON.parse(new TextDecoder().decode(bytes));
-  if (!payload.username || payload.expires < Date.now()) return null;
-  return payload;
+  return { username: session.username };
 }
 
 export function escapeHtml(value) {
