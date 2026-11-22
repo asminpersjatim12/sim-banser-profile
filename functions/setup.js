@@ -15,8 +15,6 @@ export async function onRequest(context) {
     return new Response(page(), { headers: { "Content-Type": "text/html;charset=UTF-8" } });
   }
   if (request.method !== "POST") return new Response("Metode tidak diizinkan.", { status: 405 });
-  if (!env.SESSION_SECRET) return new Response("SESSION_SECRET belum dikonfigurasi.", { status: 500 });
-
   const form = await request.formData();
   const username = String(form.get("username") || "").trim();
   const password = String(form.get("password") || "");
@@ -32,7 +30,7 @@ export async function onRequest(context) {
   ).bind(username, salt, passwordHash, new Date().toISOString()).run();
 
   const { createSession } = await import("./lib/auth.js");
-  const session = await createSession(username, env.SESSION_SECRET);
+  const session = await createSession(username, env);
   const secure = new URL(request.url).protocol === "https:";
   return new Response(null, {
     status: 302,

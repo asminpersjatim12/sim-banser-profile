@@ -6,11 +6,11 @@ function page(error = "") {
 
 export async function onRequest(context) {
   const { request, env } = context;
-  if (!env.DB || !env.SESSION_SECRET) {
+  if (!env.DB) {
     return new Response("Konfigurasi Cloudflare belum lengkap.", { status: 500 });
   }
 
-  const existingSession = await readSession(request, env.SESSION_SECRET);
+  const existingSession = await readSession(request, env);
   if (existingSession) {
     return Response.redirect(new URL("/dashboard", request.url), 302);
   }
@@ -41,7 +41,7 @@ export async function onRequest(context) {
     return new Response(page("Username atau password tidak valid."), { status: 401, headers: { "Content-Type": "text/html;charset=UTF-8" } });
   }
 
-  const session = await createSession(user.username, env.SESSION_SECRET);
+  const session = await createSession(user.username, env);
   const secure = new URL(request.url).protocol === "https:";
   return new Response(null, {
     status: 302,

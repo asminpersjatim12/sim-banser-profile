@@ -6,10 +6,10 @@ function page(username) {
 
 export async function onRequest(context) {
   const { request, env } = context;
-  if (!env.DB || !env.SESSION_SECRET) {
+  if (!env.DB) {
     return new Response("Konfigurasi Cloudflare belum lengkap.", { status: 500 });
   }
-  const session = await readSession(request, env.SESSION_SECRET);
+  const session = await readSession(request, env);
   if (!session) return Response.redirect(new URL("/login", request.url), 302);
   return new Response(page(session.username), {
     headers: {
